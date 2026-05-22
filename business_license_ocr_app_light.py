@@ -282,18 +282,26 @@ for col, label in zip(
 st.divider()
 
 # ── 사이드바: API Key 입력 ────────────────────────────────────────────────────
+# 기존 코드
+#with st.sidebar:
+#    st.header("⚙️ 설정")
+#    api_key = st.text_input(
+#        "OpenAI API Key",
+#        type="password",                        # 입력값 마스킹
+#        placeholder="sk-",
+#        help="https://platform.openai.com/api-keys 에서 발급받으세요.",
+#    )
+#    st.caption("API Key는 이 세션 내에서만 사용되며 서버에 저장되지 않습니다.")
+#    st.divider()
+#    st.markdown("**필요 패키지**")
+#    st.code("pip install streamlit openai pillow pandas openpyxl", language="bash")
+
+# 변경 코드 - Secrets에서 자동으로 읽어옴
+api_key = st.secrets["OPENAI_API_KEY"]
+
 with st.sidebar:
     st.header("⚙️ 설정")
-    api_key = st.text_input(
-        "OpenAI API Key",
-        type="password",                        # 입력값 마스킹
-        placeholder="sk-",
-        help="https://platform.openai.com/api-keys 에서 발급받으세요.",
-    )
-    st.caption("API Key는 이 세션 내에서만 사용되며 서버에 저장되지 않습니다.")
-    st.divider()
-    st.markdown("**필요 패키지**")
-    st.code("pip install streamlit openai pillow pandas openpyxl", language="bash")
+    st.success("API Key가 서버에 등록되어 있습니다.")
 
 # ── API Key 미입력 시 안내 ────────────────────────────────────────────────────
 if not api_key:
