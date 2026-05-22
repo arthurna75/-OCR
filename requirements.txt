@@ -3,5 +3,5 @@ openai
 pillow
 pandas
 openpyxl
-
+pymupdf
 
