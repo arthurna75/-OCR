@@ -30,6 +30,7 @@ from io import BytesIO          # 엑셀 파일 메모리 생성
 from pathlib import Path        # OS 독립 파일 경로 처리
 
 # ── 서드파티 라이브러리 ───────────────────────────────────────────────────────
+import fitz                     # PyMuPDF - PDF를 이미지로 변환
 import pandas as pd             # 표 데이터 처리 및 Excel 저장
 import streamlit as st          # 웹 UI 프레임워크
 from openai import OpenAI       # OpenAI Python SDK v1.x
@@ -118,19 +119,29 @@ def get_client(api_key: str) -> OpenAI:
 # ── 이미지 → Base64 변환
 # =============================================================================
 
-def image_to_base64(image_path: Path) -> tuple[str, str]:
+def pdf_to_image(pdf_path: Path) -> Path:
     """
-    이미지 파일을 Base64 문자열로 인코딩한다.
-    OpenAI Vision API는 이미지를 URL 또는 Base64로 전달받는다.
+    PDF 첫 페이지를 PNG 이미지로 변환해 임시 파일로 저장한다.
+    사업자등록증은 단일 페이지이므로 첫 페이지만 처리한다.
 
     Args:
-        image_path (Path): 이미지 파일 경로
+        pdf_path (Path): PDF 파일 경로
 
     Returns:
-        tuple:
-            - b64_str (str): Base64 인코딩 문자열
-            - media_type (str): MIME 타입 (예: "image/jpeg")
+        Path: 변환된 PNG 임시 파일 경로
     """
+    doc = fitz.open(str(pdf_path))
+    page = doc[0]                            # 첫 페이지만 사용
+    mat = fitz.Matrix(2.0, 2.0)             # 2배 확대 → 해상도 향상 (OCR 정확도)
+    pix = page.get_pixmap(matrix=mat)
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    pix.save(tmp.name)
+    doc.close()
+    return Path(tmp.name)
+
+
+def image_to_base64(image_path: Path) -> tuple[str, str]:
     ext_to_mime = {
         ".jpg":  "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -144,7 +155,6 @@ def image_to_base64(image_path: Path) -> tuple[str, str]:
         b64_str = base64.b64encode(f.read()).decode("utf-8")
 
     return b64_str, media_type
-
 
 # =============================================================================
 # ── OCR + 항목 추출 (GPT-4o Vision)
@@ -317,20 +327,23 @@ client = get_client(api_key)
 
 st.subheader("1️⃣ 사업자등록증 업로드")
 uploaded_file = st.file_uploader(
-    "사업자등록증 이미지 파일",
-    type=["png", "jpg", "jpeg", "webp"],
-    help="PNG / JPG / JPEG / WEBP 형식 지원",
+    "사업자등록증 이미지 파일 또는 PDF",
+    type=["png", "jpg", "jpeg", "webp", "pdf"],  # PDF 추가
+    help="PNG / JPG / JPEG / WEBP / PDF 형식 지원",
 )
 
 if uploaded_file:
 
-    # 업로드 파일 → 임시 파일 저장 (OpenAI API에 경로 전달 위해)
     with tempfile.NamedTemporaryFile(
         delete=False,
         suffix=Path(uploaded_file.name).suffix,
     ) as tmp:
         tmp.write(uploaded_file.getbuffer())
-        image_path = Path(tmp.name)
+        upload_path = Path(tmp.name)
+
+    # PDF면 첫 페이지를 이미지로 변환, 아니면 그대로 사용
+    is_pdf = upload_path.suffix.lower() == ".pdf"
+    image_path = pdf_to_image(upload_path) if is_pdf else upload_path
 
     # ── OCR 실행 ─────────────────────────────────────────────────────────────
     with st.spinner("🔍 GPT-4o Vision으로 분석 중입니다..."):
